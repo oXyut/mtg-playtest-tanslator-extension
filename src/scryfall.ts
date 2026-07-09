@@ -272,9 +272,11 @@ async function searchJapanesePrinting(
 }
 
 function extractImages(card: ScryfallCard): JpLookupResult {
-  if (card.image_uris) return { front: card.image_uris.normal };
+  const jaNameRaw = card.printed_name ?? card.card_faces?.[0]?.printed_name;
+  const jaName = jaNameRaw !== undefined && CJK.test(jaNameRaw) ? jaNameRaw : undefined;
+  if (card.image_uris) return { front: card.image_uris.normal, jaName };
   const faces = card.card_faces ?? [];
   const front = faces[0]?.image_uris?.normal;
   if (!front) return null;
-  return { front, back: faces[1]?.image_uris?.normal };
+  return { front, back: faces[1]?.image_uris?.normal, jaName };
 }

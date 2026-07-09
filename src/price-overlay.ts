@@ -1,11 +1,13 @@
 import { browser } from 'wxt/browser';
 import { frontFaceName, type JpPrice } from './prices';
-import type { SiteAdapter } from './swapper';
+import { lookupJapaneseImages } from './scryfall';
+import type { DeckEntry, SiteAdapter } from './swapper';
 
 /**
  * ページ上のドル価格表示を日本の店舗価格(円)に置き換え、
- * デッキ合計金額の円建てバッジを表示する。
+ * デッキ合計金額の円建てバッジ(クリックで内訳パネル)を表示する。
  * 価格の取得自体はbackground service worker(entrypoints/background.ts)が行う。
+ * バッジ類はサイト側の右下のUIと重ならないよう左下に置く。
  */
 
 /** "$10.99 / $12.99" のようなペア表示のコンテナ */
@@ -17,6 +19,8 @@ const MAX_ANCESTOR_DEPTH = 6;
 /** コンテナ内のimgがこれより多い場合は「どのカードの価格か」を特定できないとみなす */
 const MAX_IMGS_IN_CONTAINER = 12;
 
+type RequestPrice = (name: string) => Promise<JpPrice>;
+
 function fmt(yen: number): string {
   return '¥' + yen.toLocaleString('ja-JP');
 }
@@ -27,50 +31,44 @@ function isPriceOnly(text: string | null): boolean {
 }
 
 /** 価格源のページURL(晴れる屋の商品検索 / Wisdom Guildのカードページ) */
-function sourceUrl(name: string, fromHareruya: boolean): string {
+function sourceUrl(name: string, linkHareruya: boolean): string {
   const front = encodeURIComponent(frontFaceName(name));
-  return fromHareruya
+  return linkHareruya
     ? `https://www.hareruyamtg.com/ja/products/search?product=${front}`
     : `https://wonder.wisdom-guild.net/price/${front}/`;
 }
 
-function requestPrice(name: string): Promise<JpPrice> {
-  return browser.runtime.sendMessage({
-    type: 'jp-price',
-    name,
-  }) as Promise<JpPrice>;
-}
-
-/** 代表価格: 晴れる屋最安 > WGトリム平均 > WG最安 */
-function representative(p: JpPrice): number | null {
-  return p.hareruya ?? p.wgTrim ?? p.wgLow;
-}
-
 function displayOf(p: JpPrice): { text: string; title: string } | null {
-  if (p.hareruya !== null) {
-    return {
-      text: fmt(p.hareruya),
-      title: `晴れる屋 最安 (NM・非foil): ${fmt(p.hareruya)}`,
-    };
-  }
-  const value = p.wgTrim ?? p.wgLow;
-  if (value !== null) {
-    return {
-      text: fmt(value) + '*',
-      title:
-        `Wisdom Guild トリム平均: ${p.wgTrim !== null ? fmt(p.wgTrim) : '—'}` +
-        ` / 最安: ${p.wgLow !== null ? fmt(p.wgLow) : '—'} (晴れる屋在庫なし)`,
-    };
-  }
-  return null;
+  if (p.value === null) return null;
+  return {
+    text: fmt(p.value) + (p.approximate ? '*' : ''),
+    title: `${p.sourceLabel ?? ''}: ${fmt(p.value)}`,
+  };
 }
 
 export function startPriceOverlay(
   adapter: SiteAdapter,
   isEnabled: () => boolean,
+  getStore: () => string,
 ): void {
-  if (!adapter.getCardName) return;
-  const getCardName = adapter.getCardName.bind(adapter);
+  const requestPrice: RequestPrice = (name) =>
+    browser.runtime.sendMessage({
+      type: 'jp-price',
+      name,
+      store: getStore(),
+    }) as Promise<JpPrice>;
+
+  if (adapter.getCardName) startDollarSwap(adapter, isEnabled, requestPrice);
+  startTotalBadge(adapter, isEnabled, requestPrice);
+}
+
+/** ページ上のドル価格をカードに紐づけて円に置き換える */
+function startDollarSwap(
+  adapter: SiteAdapter,
+  isEnabled: () => boolean,
+  requestPrice: RequestPrice,
+): void {
+  const getCardName = adapter.getCardName!.bind(adapter);
 
   /** 価格要素の近くのカード画像からカード名を特定する */
   async function findCardName(el: Element): Promise<string | null> {
@@ -107,10 +105,7 @@ export function startPriceOverlay(
       // 価格単体のリンクだった場合は、リンク先を価格源のページに付け替える
       const anchor = el.closest('a');
       if (anchor && isPriceOnly(anchor.textContent)) {
-        anchor.setAttribute(
-          'href',
-          sourceUrl(name, price.hareruya !== null),
-        );
+        anchor.setAttribute('href', sourceUrl(name, price.linkHareruya));
         anchor.setAttribute('target', '_blank');
         anchor.setAttribute('rel', 'noopener noreferrer');
       }
@@ -153,21 +148,25 @@ export function startPriceOverlay(
     characterData: true,
   });
   scan();
-
-  startTotalBadge(adapter, isEnabled);
 }
 
 /** 内訳パネル1行分 */
 interface PricedRow {
   name: string;
+  jaName?: string;
   quantity: number;
   /** 1枚あたりの円。取得できなかったカードは null */
   unit: number | null;
-  fromHareruya: boolean;
+  approximate: boolean;
+  linkHareruya: boolean;
 }
 
-/** デッキ合計金額のバッジ(画面右下、進捗バッジの上)。クリックで内訳パネルを開く */
-function startTotalBadge(adapter: SiteAdapter, isEnabled: () => boolean): void {
+/** デッキ合計金額のバッジ(画面左下)。クリックで内訳パネルを開く */
+function startTotalBadge(
+  adapter: SiteAdapter,
+  isEnabled: () => boolean,
+  requestPrice: RequestPrice,
+): void {
   if (!adapter.getDeckList) return;
   const getDeckList = adapter.getDeckList.bind(adapter);
 
@@ -181,8 +180,8 @@ function startTotalBadge(adapter: SiteAdapter, isEnabled: () => boolean): void {
     badge = document.createElement('div');
     badge.style.cssText = [
       'position: fixed',
-      'right: 16px',
-      'bottom: 64px',
+      'left: 16px',
+      'bottom: 16px',
       'z-index: 2147483647',
       'background: rgba(20, 20, 24, 0.88)',
       'color: #fff',
@@ -221,12 +220,13 @@ function startTotalBadge(adapter: SiteAdapter, isEnabled: () => boolean): void {
   function renderPanel(): void {
     if (!panel) {
       panel = document.createElement('div');
+      // 下から: 合計バッジ(16) → 進捗バッジ(52) → 内訳パネル(92) の順に積む
       panel.style.cssText = [
         'position: fixed',
-        'right: 16px',
-        'bottom: 100px',
+        'left: 16px',
+        'bottom: 92px',
         'z-index: 2147483647',
-        'width: 340px',
+        'width: 360px',
         'max-height: 60vh',
         'overflow-y: auto',
         'background: rgba(20, 20, 24, 0.95)',
@@ -254,8 +254,10 @@ function startTotalBadge(adapter: SiteAdapter, isEnabled: () => boolean): void {
       line.style.cssText =
         'display: flex; justify-content: space-between; gap: 8px;';
       const link = document.createElement('a');
-      link.textContent = `${row.name}${row.quantity > 1 ? ` ×${row.quantity}` : ''}`;
-      link.href = sourceUrl(row.name, row.fromHareruya);
+      const label = row.jaName ?? row.name;
+      link.textContent = `${label}${row.quantity > 1 ? ` ×${row.quantity}` : ''}`;
+      link.title = row.name;
+      link.href = sourceUrl(row.name, row.linkHareruya);
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
       link.style.cssText =
@@ -264,7 +266,7 @@ function startTotalBadge(adapter: SiteAdapter, isEnabled: () => boolean): void {
       value.style.cssText = 'flex-shrink: 0; text-align: right;';
       value.textContent =
         row.unit !== null
-          ? fmt(row.unit * row.quantity) + (row.fromHareruya ? '' : '*')
+          ? fmt(row.unit * row.quantity) + (row.approximate ? '*' : '')
           : '—';
       line.append(link, value);
       panel.appendChild(line);
@@ -272,7 +274,7 @@ function startTotalBadge(adapter: SiteAdapter, isEnabled: () => boolean): void {
 
     const note = document.createElement('div');
     note.textContent =
-      '* はWisdom Guild平均(晴れる屋在庫なし)。— は価格を取得できなかったカード。';
+      '* はWisdom Guild平均による近似。— は価格を取得できなかったカード。';
     note.style.cssText =
       'margin-top: 6px; color: rgba(255,255,255,0.6); font-size: 11px;';
     panel.appendChild(note);
@@ -285,7 +287,7 @@ function startTotalBadge(adapter: SiteAdapter, isEnabled: () => boolean): void {
     computedForPath = path;
 
     const list = await getDeckList();
-    if (!list) return;
+    if (!list || list.length === 0) return;
 
     rows = [];
     const totalCards = list.reduce((s, e) => s + e.quantity, 0);
@@ -295,21 +297,36 @@ function startTotalBadge(adapter: SiteAdapter, isEnabled: () => boolean): void {
     let settled = 0;
 
     await Promise.all(
-      list.map(async ({ name, quantity }) => {
-        let row: PricedRow = { name, quantity, unit: null, fromHareruya: false };
+      list.map(async (entry: DeckEntry) => {
+        const { name, quantity } = entry;
+        let row: PricedRow = {
+          name,
+          quantity,
+          unit: null,
+          approximate: false,
+          linkHareruya: false,
+        };
         try {
+          // 日本語名(画像差し替えで温まったキャッシュから引けることが多い)
+          const jaName = entry.scryfallId
+            ? (await lookupJapaneseImages({ kind: 'scryfallId', id: entry.scryfallId }))
+                ?.jaName
+            : undefined;
           const price = await requestPrice(name);
-          const value = representative(price);
-          if (value !== null) {
+          if (price.value !== null) {
             row = {
               name,
+              jaName,
               quantity,
-              unit: value,
-              fromHareruya: price.hareruya !== null,
+              unit: price.value,
+              approximate: price.approximate,
+              linkHareruya: price.linkHareruya,
             };
-            sum += value * quantity;
+            sum += price.value * quantity;
             pricedCards += quantity;
-            if (price.hareruya === null) usedFallback = true;
+            if (price.approximate) usedFallback = true;
+          } else {
+            row.jaName = jaName;
           }
         } catch {
           // 取得失敗は合計から除外するだけ
@@ -320,7 +337,7 @@ function startTotalBadge(adapter: SiteAdapter, isEnabled: () => boolean): void {
           const suffix = settled < list.length ? ' 取得中…' : '';
           render(
             `デッキ合計 ${fmt(sum)}${usedFallback ? '*' : ''} (${pricedCards}/${totalCards}枚)${suffix}`,
-            '晴れる屋最安(NM・非foil)の合計。* はWisdom Guild平均で補完したカードを含む。' +
+            '設定した店舗の価格の合計。* はWisdom Guild平均で近似したカードを含む。' +
               '価格が取得できなかったカードは合計に含まれません。',
           );
           if (panel && panel.style.display !== 'none') renderPanel();

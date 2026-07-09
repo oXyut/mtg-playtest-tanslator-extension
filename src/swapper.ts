@@ -13,8 +13,16 @@ export interface SiteAdapter {
   zoomSrc?(img: HTMLImageElement): string | null;
   /** imgからカードの英語名を得る(価格表示用)。不明なら null */
   getCardName?(img: HTMLImageElement): Promise<string | null>;
-  /** メインデッキ+統率者の {英語名, 枚数} 一覧(デッキ合計金額用)。取れなければ null */
-  getDeckList?(): Promise<Array<{ name: string; quantity: number }> | null>;
+  /** メインデッキ+統率者の一覧(デッキ合計金額用)。取れなければ null */
+  getDeckList?(): Promise<DeckEntry[] | null>;
+}
+
+export interface DeckEntry {
+  /** 英語名 */
+  name: string;
+  quantity: number;
+  /** 印刷のScryfall ID(日本語名の解決に使う。取れない場合は省略) */
+  scryfallId?: string;
 }
 
 const ORIGINAL_SRC = 'jpOriginalSrc';

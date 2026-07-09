@@ -1,5 +1,5 @@
 import type { CardRef } from '../scryfall';
-import type { SiteAdapter } from '../swapper';
+import type { DeckEntry, SiteAdapter } from '../swapper';
 
 /**
  * 対象画面のURL: /decks/{publicId}(デッキビュー)とその配下
@@ -37,8 +37,8 @@ interface CardEntry {
 export function createMoxfieldAdapter(): SiteAdapter {
   /** moxfieldのカードID・面ID → Scryfall ID と表裏 */
   let cardMap = new Map<string, CardEntry>();
-  /** メインデッキ+統率者の {英語名, 枚数}(デッキ合計金額用) */
-  let deckList: Array<{ name: string; quantity: number }> = [];
+  /** メインデッキ+統率者の一覧(デッキ合計金額用) */
+  let deckList: DeckEntry[] = [];
   let loadedDeckId: string | null = null;
   let loading: Promise<void> | null = null;
 
@@ -106,7 +106,7 @@ export function createMoxfieldAdapter(): SiteAdapter {
       return null;
     },
 
-    async getDeckList(): Promise<Array<{ name: string; quantity: number }> | null> {
+    async getDeckList(): Promise<DeckEntry[] | null> {
       await ensureDeckData();
       return deckList.length > 0 ? deckList : null;
     },
@@ -164,11 +164,9 @@ function collectCards(
  * デッキ合計金額の対象になるボードだけから {英語名, 枚数} を集める。
  * サイドボード・検討中(maybeboard)は合計に含めない。
  */
-function collectDeckList(
-  json: unknown,
-): Array<{ name: string; quantity: number }> {
+function collectDeckList(json: unknown): DeckEntry[] {
   const boards = (json as { boards?: Record<string, unknown> } | null)?.boards;
-  const out: Array<{ name: string; quantity: number }> = [];
+  const out: DeckEntry[] = [];
   if (boards === null || typeof boards !== 'object') return out;
   for (const boardName of ['mainboard', 'commanders', 'companions']) {
     const cards = (boards[boardName] as { cards?: Record<string, unknown> } | undefined)
@@ -177,12 +175,17 @@ function collectDeckList(
     for (const entry of Object.values(cards)) {
       const e = entry as {
         quantity?: unknown;
-        card?: { name?: unknown } | null;
+        card?: { name?: unknown; scryfall_id?: unknown } | null;
       } | null;
       const name = e?.card?.name;
       const quantity = e?.quantity;
+      const scryfallId = e?.card?.scryfall_id;
       if (typeof name === 'string' && typeof quantity === 'number' && quantity > 0) {
-        out.push({ name, quantity });
+        out.push({
+          name,
+          quantity,
+          scryfallId: typeof scryfallId === 'string' ? scryfallId : undefined,
+        });
       }
     }
   }

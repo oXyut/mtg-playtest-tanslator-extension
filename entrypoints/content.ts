@@ -27,7 +27,11 @@ export default defineContentScript({
 
     const { rescan, restoreAll } = startSwapper(adapter, () => settings[site]);
 
-    startPriceOverlay(adapter, () => settings.jpPrices && adapter.isTargetPage());
+    startPriceOverlay(
+      adapter,
+      () => settings.jpPrices && adapter.isTargetPage(),
+      () => settings.priceStore,
+    );
 
     if (adapter.zoomSrc) {
       const zoomSrc = adapter.zoomSrc.bind(adapter);

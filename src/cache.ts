@@ -4,6 +4,8 @@ import { browser } from 'wxt/browser';
 export interface JpImages {
   front: string;
   back?: string;
+  /** 日本語の印刷名(取れた場合のみ) */
+  jaName?: string;
 }
 
 /** null = 日本語版が存在しない(これもキャッシュして再問い合わせを防ぐ) */

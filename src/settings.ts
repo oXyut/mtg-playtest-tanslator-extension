@@ -7,6 +7,8 @@ export interface Settings {
   hoverZoom: boolean;
   /** 日本の店舗価格(晴れる屋/Wisdom Guild)の表示 */
   jpPrices: boolean;
+  /** 価格源: 'hareruya' | 'lowest' | 'wg:店名' */
+  priceStore: string;
 }
 
 const DEFAULTS: Settings = {
@@ -14,6 +16,7 @@ const DEFAULTS: Settings = {
   archidekt: true,
   hoverZoom: true,
   jpPrices: true,
+  priceStore: 'hareruya',
 };
 const KEY = 'settings';
 

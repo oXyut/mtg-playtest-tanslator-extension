@@ -1,10 +1,10 @@
 import type { CardRef } from '../scryfall';
-import type { SiteAdapter } from '../swapper';
+import type { DeckEntry, SiteAdapter } from '../swapper';
 
 /** Playtest画面のURL: /playtester-v2/{deckId} (旧 /playtester/ も許容) */
-const PLAYTESTER_PATH = /^\/playtester(-v2)?\//;
+const PLAYTESTER_PATH = /^\/playtester(-v2)?\/(\d+)/;
 /** デッキビュー画面のURL: /decks/{deckId} */
-const DECK_PATH = /^\/decks\/\d+/;
+const DECK_PATH = /^\/decks\/(\d+)/;
 
 /**
  * カード画像URL(実測 2026-07):
@@ -22,6 +22,39 @@ const LEGACY_IMAGE_SRC =
 const ALT_NAME = /^(.+?) \([a-z0-9]+\) \S+$/;
 
 export function createArchidektAdapter(): SiteAdapter {
+  let deckList: DeckEntry[] | null = null;
+  let loadedDeckId: string | null = null;
+  let loading: Promise<void> | null = null;
+
+  function currentDeckId(): string | null {
+    return (
+      DECK_PATH.exec(location.pathname)?.[1] ??
+      PLAYTESTER_PATH.exec(location.pathname)?.[2] ??
+      null
+    );
+  }
+
+  async function ensureDeckData(): Promise<void> {
+    const deckId = currentDeckId();
+    if (!deckId || deckId === loadedDeckId) return;
+    if (loading) return loading;
+    loading = (async () => {
+      try {
+        // 同一オリジンの公開API
+        const res = await fetch(`https://archidekt.com/api/decks/${deckId}/`);
+        if (!res.ok) throw new Error(`Archidekt API ${res.status}`);
+        deckList = collectDeckList(await res.json());
+      } catch (e) {
+        console.info('[MTG デッキ日本語化] Archidektデッキ情報の取得に失敗:', e);
+        deckList = null;
+      } finally {
+        loadedDeckId = deckId;
+        loading = null;
+      }
+    })();
+    return loading;
+  }
+
   return {
     isTargetPage: () =>
       PLAYTESTER_PATH.test(location.pathname) ||
@@ -67,5 +100,52 @@ export function createArchidektAdapter(): SiteAdapter {
       if (LEGACY_IMAGE_SRC.test(src)) return src;
       return null;
     },
+
+    async getCardName(img: HTMLImageElement): Promise<string | null> {
+      const alt = ALT_NAME.exec(img.getAttribute('alt') ?? '');
+      return alt ? alt[1] : null;
+    },
+
+    async getDeckList(): Promise<DeckEntry[] | null> {
+      await ensureDeckData();
+      return deckList;
+    },
   };
+}
+
+/**
+ * ArchidektのデッキAPIレスポンスから合計金額の対象カードを集める。
+ * includedInDeck=false のカテゴリ(Maybeboard等)に入っているカードは除外。
+ */
+function collectDeckList(json: unknown): DeckEntry[] {
+  const data = json as {
+    categories?: Array<{ name?: string; includedInDeck?: boolean }>;
+    cards?: Array<{
+      quantity?: number;
+      categories?: string[];
+      card?: { uid?: string; oracleCard?: { name?: string } };
+    }>;
+  } | null;
+
+  const excluded = new Set(
+    (data?.categories ?? [])
+      .filter((c) => c.includedInDeck === false && typeof c.name === 'string')
+      .map((c) => c.name as string),
+  );
+
+  const out: DeckEntry[] = [];
+  for (const entry of data?.cards ?? []) {
+    const name = entry.card?.oracleCard?.name;
+    const quantity = entry.quantity;
+    if (typeof name !== 'string' || typeof quantity !== 'number' || quantity <= 0)
+      continue;
+    if ((entry.categories ?? []).some((c) => excluded.has(c))) continue;
+    out.push({
+      name,
+      quantity,
+      scryfallId:
+        typeof entry.card?.uid === 'string' ? entry.card.uid : undefined,
+    });
+  }
+  return out;
 }

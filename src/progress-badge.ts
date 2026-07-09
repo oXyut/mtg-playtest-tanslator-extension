@@ -13,10 +13,12 @@ export function createProgressBadge(): ProgressListener {
   function ensure(): void {
     if (badge) return;
     badge = document.createElement('div');
+    // サイト側の右下の浮遊UI(Moxfieldのスクロールボタン等)と重ならないよう左下に置く。
+    // 合計バッジ(左下)とも重ならないよう1段上にする
     badge.style.cssText = [
       'position: fixed',
-      'right: 16px',
-      'bottom: 16px',
+      'left: 16px',
+      'bottom: 52px',
       'z-index: 2147483647',
       'pointer-events: none',
       'background: rgba(20, 20, 24, 0.88)',

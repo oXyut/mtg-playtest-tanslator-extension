@@ -7,11 +7,12 @@ Moxfield / Archidekt のデッキ画面と Playtest(ソリティア)画面で、
   - Moxfield: `moxfield.com/decks/{id}` 配下(デッキビュー、primer、Playtest = goldfish)
   - Archidekt: `archidekt.com/decks/{id}`(デッキビュー)と `archidekt.com/playtester-v2/{id}`(Playtest)
 - ArchidektのPlaytestではカードにマウスを乗せると拡大表示します(Moxfieldの標準ホバー拡大に相当。ポップアップでOFFにできます)
-- **日本の店舗価格表示(Moxfield)**: ドル建ての価格表示を円に置き換えます
-  - 価格源: 晴れる屋の在庫あり・NM・非foilの最安値。在庫が無いカードは [Wisdom Guild](https://wonder.wisdom-guild.net/) のトリム平均(`¥xxx*` のようにアスタリスク付き)
-  - 画面右下にデッキ合計(メインデッキ+統率者)の円建てバッジを表示
+- **日本の店舗価格表示**: ドル建ての価格表示を円に置き換え(Moxfield)、デッキ合計の円建てバッジを表示します(Moxfield / Archidekt)
+  - 価格源はポップアップで選択: **晴れる屋**(既定) / **店舗問わず最安** / [Wisdom Guild](https://wonder.wisdom-guild.net/) 掲載店(カードラッシュ・トレトク等)。いずれも在庫あり・非foilの最安値で、取れない場合はWisdom Guildのトリム平均で近似(`¥xxx*`)
+  - 円に置き換えた価格やデッキ合計バッジの内訳パネルから、晴れる屋の商品検索/WGのカードページに飛べます
+  - デッキ合計バッジは画面**左下**(メインデッキ+統率者。サイドボード・Maybeboardは除外)。クリックで内訳パネル(日本語カード名・高い順)
   - 価格は**カード名単位**です(セット・絵柄・言語別ではありません)。元のドル表示はホバー(title)で確認できます
-  - 24時間キャッシュ+直列取得で店舗サイトに負荷をかけない設計です
+  - 24時間キャッシュ+直列取得で店舗サイトに負荷をかけない設計です。店舗設定を変えたらページを再読み込みしてください
 
 ## インストール(ビルド済みを使う)
 

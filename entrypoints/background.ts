@@ -1,5 +1,5 @@
 import { browser } from 'wxt/browser';
-import { fetchJpPrice, type JpPrice } from '../src/prices';
+import { fetchJpPrice, type JpPrice, type PriceStore } from '../src/prices';
 
 /**
  * 店舗サイトへの問い合わせはbackgroundに集約する:
@@ -26,8 +26,8 @@ interface CacheEntry {
   t: number;
 }
 
-async function getJpPrice(name: string): Promise<JpPrice> {
-  const key = 'price:' + name.toLowerCase();
+async function getJpPrice(name: string, store: PriceStore): Promise<JpPrice> {
+  const key = `price:${store}:${name.toLowerCase()}`;
   const stored = await browser.storage.local.get(key);
   const entry = stored[key] as CacheEntry | undefined;
   if (entry && Date.now() - entry.t < TTL_MS) return entry.v;
@@ -35,7 +35,7 @@ async function getJpPrice(name: string): Promise<JpPrice> {
   const pending = inflight.get(key);
   if (pending) return pending;
 
-  const promise = enqueue(() => fetchJpPrice(name));
+  const promise = enqueue(() => fetchJpPrice(name, store));
   inflight.set(key, promise);
   try {
     const value = await promise;
@@ -48,9 +48,13 @@ async function getJpPrice(name: string): Promise<JpPrice> {
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener((message: unknown) => {
-    const msg = message as { type?: string; name?: string };
+    const msg = message as { type?: string; name?: string; store?: string };
     if (msg?.type === 'jp-price' && typeof msg.name === 'string') {
-      return getJpPrice(msg.name);
+      const store =
+        msg.store === 'lowest' || msg.store?.startsWith('wg:')
+          ? (msg.store as PriceStore)
+          : 'hareruya';
+      return getJpPrice(msg.name, store);
     }
     return undefined;
   });

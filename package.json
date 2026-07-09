@@ -2,7 +2,7 @@
   "name": "mtg-deck-translator",
   "description": "Moxfield / Archidekt のデッキ画面・Playtest画面でカード画像を日本語版に差し替えるChrome拡張",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.9.0",
   "type": "module",
   "scripts": {
     "dev": "wxt",
