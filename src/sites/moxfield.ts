@@ -58,7 +58,7 @@ export function createMoxfieldAdapter(): SiteAdapter {
         cardMap = collectCards(json);
         loadedDeckId = deckId;
       } catch (e) {
-        console.info('[MTG Playtest 日本語化] デッキ情報の取得に失敗:', e);
+        console.info('[MTG デッキ日本語化] デッキ情報の取得に失敗:', e);
         loadedDeckId = deckId; // リトライの嵐を避けるため失敗も記録
       } finally {
         loading = null;

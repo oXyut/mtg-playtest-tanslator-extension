@@ -1,4 +1,4 @@
-# MTG Playtest 日本語化
+# MTG デッキ日本語化 (mtg-deck-translator)
 
 Moxfield / Archidekt のデッキ画面と Playtest(ソリティア)画面で、カード画像を**公式の日本語版印刷の画像**に差し替える Chrome 拡張機能です。翻訳データは [Scryfall](https://scryfall.com/) の日本語版 printing を使うため、機械翻訳ではなく公式訳が表示されます。
 
@@ -10,7 +10,7 @@ Moxfield / Archidekt のデッキ画面と Playtest(ソリティア)画面で、
 
 ## インストール(ビルド済みを使う)
 
-1. [Releases](https://github.com/oXyut/mtg-playtest-tanslator-extension/releases) から最新の `mtg-playtest-translator-x.y.z-chrome.zip` をダウンロードして解凍
+1. [Releases](https://github.com/oXyut/mtg-deck-translator-extension/releases) から最新の `mtg-deck-translator-x.y.z-chrome.zip` をダウンロードして解凍
 2. `chrome://extensions` を開き、右上の「デベロッパーモード」をON
 3. 「パッケージ化されていない拡張機能を読み込む」で解凍したフォルダを指定
 
