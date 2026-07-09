@@ -3,4 +3,5 @@ node_modules/
 output/
 .wxt/
 *.log
+dev.log
 .DS_Store

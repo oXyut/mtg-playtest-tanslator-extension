@@ -90,12 +90,51 @@ function startDollarSwap(
   const getCardName = adapter.getCardName!.bind(adapter);
 
   /** 価格要素の近くのカード画像からカード名を特定する */
+  /**
+   * imgが多すぎる階層に達したときのフォールバック:
+   * 価格要素と同じ縦の列(X中心が画像の幅内)にあり、縦方向に近い
+   * カード画像を候補にする。プレビュー画像と価格は小さな共通コンテナを
+   * 持たないことがある(Moxfieldで実測)ための近接ヒューリスティック
+   */
+  function columnCandidates(
+    el: Element,
+    imgs: NodeListOf<HTMLImageElement>,
+  ): HTMLImageElement[] {
+    const rect = el.getBoundingClientRect();
+    const cx = (rect.left + rect.right) / 2;
+    const cy = (rect.top + rect.bottom) / 2;
+    return [...imgs]
+      .map((img) => ({ img, r: img.getBoundingClientRect() }))
+      .filter(
+        ({ r }) =>
+          r.width > 50 && // アイコン類を除外
+          cx >= r.left &&
+          cx <= r.right &&
+          Math.abs((r.top + r.bottom) / 2 - cy) < 600,
+      )
+      .sort(
+        (a, b) =>
+          Math.abs((a.r.top + a.r.bottom) / 2 - cy) -
+          Math.abs((b.r.top + b.r.bottom) / 2 - cy),
+      )
+      .slice(0, 3)
+      .map(({ img }) => img);
+  }
+
   async function findCardName(el: Element): Promise<string | null> {
     let node: Element | null = el.parentElement;
     for (let depth = 0; node && depth < MAX_ANCESTOR_DEPTH; depth++) {
       const imgs = node.querySelectorAll('img');
       if (imgs.length > MAX_IMGS_IN_CONTAINER) {
-        debug('カード特定中断: 深さ', depth, 'でimgが', imgs.length, '個(多すぎ)');
+        debug('カード特定: 深さ', depth, 'でimg', imgs.length, '個 → 近接探索へ');
+        for (const img of columnCandidates(el, imgs)) {
+          const name = await getCardName(img);
+          if (name) {
+            debug('近接カード特定:', name);
+            return name;
+          }
+        }
+        debug('近接カード特定失敗: 同じ列にカード画像なし');
         return null;
       }
       for (const img of imgs) {
