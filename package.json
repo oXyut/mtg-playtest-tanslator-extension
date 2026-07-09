@@ -2,7 +2,7 @@
   "name": "mtg-playtest-translator",
   "description": "Moxfield / Archidekt のPlaytest画面でカード画像を日本語版に差し替えるChrome拡張",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.5.1",
   "type": "module",
   "scripts": {
     "dev": "wxt",

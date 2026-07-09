@@ -12,6 +12,12 @@ const DECK_PATH = /^\/decks\/([^/]+)/;
  * - 両面カード等: https://assets.moxfield.net/cards/card-face-{moxfieldId}-normal.webp
  */
 const CARD_IMAGE_SRC = /moxfield\.[a-z]+\/cards\/card-(?:(?:face|back)-)*([A-Za-z0-9]+)-/;
+/**
+ * Moxfield自身がScryfall画像を直接使う箇所(両面カードのプレビュー等)。
+ * URLに印刷のScryfall IDが入っているのでそのまま使える。
+ */
+const SCRYFALL_IMAGE_SRC =
+  /cards\.scryfall\.io\/[a-z_]+\/(?:front|back)\/[0-9a-f]\/[0-9a-f]\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
 /** カード以外のimgが持つプレースホルダalt */
 const PLACEHOLDER_ALT = 'Card Image';
 
@@ -58,7 +64,12 @@ export function createMoxfieldAdapter(): SiteAdapter {
     isTargetPage: () => currentDeckId() !== null,
 
     async identify(img: HTMLImageElement): Promise<CardRef | null> {
-      const match = CARD_IMAGE_SRC.exec(img.getAttribute('src') ?? '');
+      const src = img.getAttribute('src') ?? '';
+
+      const scryfall = SCRYFALL_IMAGE_SRC.exec(src);
+      if (scryfall) return { kind: 'scryfallId', id: scryfall[1] };
+
+      const match = CARD_IMAGE_SRC.exec(src);
       if (!match) return null;
       await ensureDeckData();
       const scryfallId = cardMap.get(match[1]);
@@ -72,7 +83,9 @@ export function createMoxfieldAdapter(): SiteAdapter {
 
     isBackFace: (img) => {
       const src = img.getAttribute('src') ?? '';
-      return src.includes('-back') || src.includes('back-');
+      return (
+        src.includes('-back') || src.includes('back-') || src.includes('/back/')
+      );
     },
   };
 }

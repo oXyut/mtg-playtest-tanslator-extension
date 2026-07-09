@@ -13,9 +13,18 @@ export interface SiteAdapter {
   zoomSrc?(img: HTMLImageElement): string | null;
 }
 
-const SCRYFALL_IMAGE_HOST = 'cards.scryfall.io';
 const ORIGINAL_SRC = 'jpOriginalSrc';
 const ORIGINAL_SRCSET = 'jpOriginalSrcset';
+/** 自分が差し替えたsrc。サイト由来のScryfall画像と区別するための記録 */
+const SWAPPED_SRC = 'jpSwappedSrc';
+
+/** 差し替え先の画像サイズを元画像のサイズ(small/normal/large)に合わせる */
+const SCRYFALL_SIZE = /cards\.scryfall\.io\/(small|normal|large)\//;
+function matchImageSize(originalSrc: string, target: string): string {
+  const size = SCRYFALL_SIZE.exec(originalSrc)?.[1];
+  if (!size) return target;
+  return target.replace(SCRYFALL_SIZE, `cards.scryfall.io/${size}/`);
+}
 
 export function startSwapper(
   adapter: SiteAdapter,
@@ -56,8 +65,11 @@ export function startSwapper(
     if (!isEnabled() || !adapter.isTargetPage()) return;
 
     const src = img.getAttribute('src') ?? '';
-    // 差し替え済み(または元々Scryfall画像)なら何もしない。これが無限ループ防止も兼ねる
-    if (!src || src.includes(SCRYFALL_IMAGE_HOST)) return;
+    if (!src) return;
+    // 自分が差し替えた画像なら何もしない(無限ループ防止)。
+    // サイト自身がScryfall画像を使うことがある(Moxfieldの両面カードプレビュー等)
+    // ため、ホスト名ではなく「自分が設定したsrcかどうか」で判定する
+    if (img.dataset[SWAPPED_SRC] === src) return;
 
     const ref = await adapter.identify(img);
     if (!ref) return;
@@ -65,9 +77,11 @@ export function startSwapper(
     const jp = await lookupJapaneseImages(ref);
     if (!jp) return;
 
-    const target = adapter.isBackFace(img) ? jp.back : jp.front;
+    let target = adapter.isBackFace(img) ? jp.back : jp.front;
     // 裏面の日本語画像が取れないケースは英語のままにする
     if (!target) return;
+    target = matchImageSize(src, target);
+    if (target === src) return;
 
     // 待っている間にsrcが変わっていたら、その変更分のmutationで再処理される
     if (img.getAttribute('src') !== src) return;
@@ -77,6 +91,7 @@ export function startSwapper(
       img.dataset[ORIGINAL_SRCSET] = img.srcset;
       img.srcset = '';
     }
+    img.dataset[SWAPPED_SRC] = target;
     img.src = target;
   }
 
@@ -90,6 +105,7 @@ export function startSwapper(
         if (originalSrcset) img.srcset = originalSrcset;
         delete img.dataset[ORIGINAL_SRC];
         delete img.dataset[ORIGINAL_SRCSET];
+        delete img.dataset[SWAPPED_SRC];
       });
   };
 
