@@ -18,16 +18,23 @@ const CARD_IMAGE_SRC = /moxfield\.[a-z]+\/cards\/card-(?:(?:face|back)-)*([A-Za-
  */
 const SCRYFALL_IMAGE_SRC =
   /cards\.scryfall\.io\/[a-z_]+\/(?:front|back)\/[0-9a-f]\/[0-9a-f]\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
-/** カード以外のimgが持つプレースホルダalt */
-const PLACEHOLDER_ALT = 'Card Image';
+/** カード名ではないaltの値(プレースホルダやフリップウィジェットのボタン) */
+const NON_CARD_ALTS = new Set(['Card Image', 'Front', 'Back', 'Transform']);
+
+/** MoxfieldカードID(または面ID)1つ分の情報 */
+interface CardEntry {
+  scryfallId: string;
+  /** 両面カードの裏面のIDか */
+  back: boolean;
+}
 
 /**
  * MoxfieldのPlaytest画像は alt="Card Image" でカード名を持たないため、
  * デッキの公開APIからMoxfieldカードID→Scryfall IDの対応表を作って識別する。
  */
 export function createMoxfieldAdapter(): SiteAdapter {
-  /** moxfieldId → scryfall_id */
-  let cardMap = new Map<string, string>();
+  /** moxfieldのカードID・面ID → Scryfall ID と表裏 */
+  let cardMap = new Map<string, CardEntry>();
   let loadedDeckId: string | null = null;
   let loading: Promise<void> | null = null;
 
@@ -72,17 +79,22 @@ export function createMoxfieldAdapter(): SiteAdapter {
       const match = CARD_IMAGE_SRC.exec(src);
       if (!match) return null;
       await ensureDeckData();
-      const scryfallId = cardMap.get(match[1]);
-      if (scryfallId) return { kind: 'scryfallId', id: scryfallId };
-      // 対応表に無い場合(非公開デッキ、face付きURLのface固有ID等)は
-      // altのカード名("Name" または "Front // Back")で引く
+      const entry = cardMap.get(match[1]);
+      if (entry) return { kind: 'scryfallId', id: entry.scryfallId };
+      // 対応表に無い場合(非公開デッキ等)はaltのカード名で引く。
+      // フリップウィジェットのボタン等のaltは除外する
       const alt = img.getAttribute('alt')?.trim() ?? '';
-      if (alt && alt !== PLACEHOLDER_ALT) return { kind: 'name', name: alt };
+      if (alt && !NON_CARD_ALTS.has(alt)) return { kind: 'name', name: alt };
       return null;
     },
 
     isBackFace: (img) => {
       const src = img.getAttribute('src') ?? '';
+      // 面IDが対応表にあればそれが正(card-face-{裏面ID} のURLには
+      // "back" が含まれないため、URLだけでは判定できない)
+      const id = CARD_IMAGE_SRC.exec(src)?.[1];
+      const entry = id !== undefined ? cardMap.get(id) : undefined;
+      if (entry) return entry.back;
       return (
         src.includes('-back') || src.includes('back-') || src.includes('/back/')
       );
@@ -94,14 +106,28 @@ export function createMoxfieldAdapter(): SiteAdapter {
  * デッキJSONを再帰的に走査し、`id` と `scryfall_id` を両方持つ
  * カードオブジェクトを全て拾う。APIレスポンスの構造変化(v2/v3、
  * boards/tokensの配置)に依存しないための総当たり方式。
+ * 両面カードは card_faces の各面が固有の `id` を持ち、面画像のURL
+ * (card-face-{面ID}-...)に使われるため、面IDも親のScryfall IDに紐づける。
  */
-function collectCards(node: unknown, map = new Map<string, string>()): Map<string, string> {
+function collectCards(
+  node: unknown,
+  map = new Map<string, CardEntry>(),
+): Map<string, CardEntry> {
   if (Array.isArray(node)) {
     for (const item of node) collectCards(item, map);
   } else if (node !== null && typeof node === 'object') {
     const obj = node as Record<string, unknown>;
     if (typeof obj.id === 'string' && typeof obj.scryfall_id === 'string') {
-      map.set(obj.id, obj.scryfall_id);
+      const scryfallId = obj.scryfall_id;
+      map.set(obj.id, { scryfallId, back: false });
+      if (Array.isArray(obj.card_faces)) {
+        obj.card_faces.forEach((face, index) => {
+          const faceId = (face as Record<string, unknown> | null)?.id;
+          if (typeof faceId === 'string') {
+            map.set(faceId, { scryfallId, back: index > 0 });
+          }
+        });
+      }
     }
     for (const value of Object.values(obj)) {
       if (value !== null && typeof value === 'object') collectCards(value, map);
