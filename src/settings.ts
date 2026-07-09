@@ -5,9 +5,16 @@ export interface Settings {
   archidekt: boolean;
   /** Archidektのホバー拡大表示(Moxfieldには標準機能があるため不要) */
   hoverZoom: boolean;
+  /** 日本の店舗価格(晴れる屋/Wisdom Guild)の表示 */
+  jpPrices: boolean;
 }
 
-const DEFAULTS: Settings = { moxfield: true, archidekt: true, hoverZoom: true };
+const DEFAULTS: Settings = {
+  moxfield: true,
+  archidekt: true,
+  hoverZoom: true,
+  jpPrices: true,
+};
 const KEY = 'settings';
 
 export async function getSettings(): Promise<Settings> {

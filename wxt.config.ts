@@ -6,6 +6,10 @@ export default defineConfig({
     description:
       'Moxfield / Archidekt のデッキ画面・Playtest画面でカード画像を日本語版に差し替えます。ホバー拡大などの補助機能付き',
     permissions: ['storage'],
-    host_permissions: ['https://api.scryfall.com/*'],
+    host_permissions: [
+      'https://api.scryfall.com/*',
+      'https://www.hareruyamtg.com/*',
+      'https://wonder.wisdom-guild.net/*',
+    ],
   },
 });

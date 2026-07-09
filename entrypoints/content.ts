@@ -1,4 +1,5 @@
 import { startHoverZoom } from '../src/hover-zoom';
+import { startPriceOverlay } from '../src/price-overlay';
 import { createProgressBadge } from '../src/progress-badge';
 import { setProgressListener } from '../src/progress';
 import { createArchidektAdapter } from '../src/sites/archidekt';
@@ -25,6 +26,8 @@ export default defineContentScript({
     setProgressListener(createProgressBadge());
 
     const { rescan, restoreAll } = startSwapper(adapter, () => settings[site]);
+
+    startPriceOverlay(adapter, () => settings.jpPrices && adapter.isTargetPage());
 
     if (adapter.zoomSrc) {
       const zoomSrc = adapter.zoomSrc.bind(adapter);

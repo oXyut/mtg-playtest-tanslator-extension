@@ -24,6 +24,8 @@ const NON_CARD_ALTS = new Set(['Card Image', 'Front', 'Back', 'Transform']);
 /** MoxfieldカードID(または面ID)1つ分の情報 */
 interface CardEntry {
   scryfallId: string;
+  /** カードの英語名(両面カードはフルネーム "A // B") */
+  name: string;
   /** 両面カードの裏面のIDか */
   back: boolean;
 }
@@ -35,6 +37,8 @@ interface CardEntry {
 export function createMoxfieldAdapter(): SiteAdapter {
   /** moxfieldのカードID・面ID → Scryfall ID と表裏 */
   let cardMap = new Map<string, CardEntry>();
+  /** メインデッキ+統率者の {英語名, 枚数}(デッキ合計金額用) */
+  let deckList: Array<{ name: string; quantity: number }> = [];
   let loadedDeckId: string | null = null;
   let loading: Promise<void> | null = null;
 
@@ -56,6 +60,7 @@ export function createMoxfieldAdapter(): SiteAdapter {
         if (!res.ok) throw new Error(`Moxfield API ${res.status}`);
         const json: unknown = await res.json();
         cardMap = collectCards(json);
+        deckList = collectDeckList(json);
         loadedDeckId = deckId;
       } catch (e) {
         console.info('[MTG デッキ日本語化] デッキ情報の取得に失敗:', e);
@@ -86,6 +91,24 @@ export function createMoxfieldAdapter(): SiteAdapter {
       const alt = img.getAttribute('alt')?.trim() ?? '';
       if (alt && !NON_CARD_ALTS.has(alt)) return { kind: 'name', name: alt };
       return null;
+    },
+
+    async getCardName(img: HTMLImageElement): Promise<string | null> {
+      const src = img.getAttribute('src') ?? '';
+      if (CARD_IMAGE_SRC.test(src) || SCRYFALL_IMAGE_SRC.test(src)) {
+        await ensureDeckData();
+        const id = CARD_IMAGE_SRC.exec(src)?.[1];
+        const entry = id !== undefined ? cardMap.get(id) : undefined;
+        if (entry) return entry.name;
+        const alt = img.getAttribute('alt')?.trim() ?? '';
+        if (alt && !NON_CARD_ALTS.has(alt)) return alt;
+      }
+      return null;
+    },
+
+    async getDeckList(): Promise<Array<{ name: string; quantity: number }> | null> {
+      await ensureDeckData();
+      return deckList.length > 0 ? deckList : null;
     },
 
     isBackFace: (img) => {
@@ -119,12 +142,13 @@ function collectCards(
     const obj = node as Record<string, unknown>;
     if (typeof obj.id === 'string' && typeof obj.scryfall_id === 'string') {
       const scryfallId = obj.scryfall_id;
-      map.set(obj.id, { scryfallId, back: false });
+      const name = typeof obj.name === 'string' ? obj.name : '';
+      map.set(obj.id, { scryfallId, name, back: false });
       if (Array.isArray(obj.card_faces)) {
         obj.card_faces.forEach((face, index) => {
           const faceId = (face as Record<string, unknown> | null)?.id;
           if (typeof faceId === 'string') {
-            map.set(faceId, { scryfallId, back: index > 0 });
+            map.set(faceId, { scryfallId, name, back: index > 0 });
           }
         });
       }
@@ -134,4 +158,33 @@ function collectCards(
     }
   }
   return map;
+}
+
+/**
+ * デッキ合計金額の対象になるボードだけから {英語名, 枚数} を集める。
+ * サイドボード・検討中(maybeboard)は合計に含めない。
+ */
+function collectDeckList(
+  json: unknown,
+): Array<{ name: string; quantity: number }> {
+  const boards = (json as { boards?: Record<string, unknown> } | null)?.boards;
+  const out: Array<{ name: string; quantity: number }> = [];
+  if (boards === null || typeof boards !== 'object') return out;
+  for (const boardName of ['mainboard', 'commanders', 'companions']) {
+    const cards = (boards[boardName] as { cards?: Record<string, unknown> } | undefined)
+      ?.cards;
+    if (cards === null || typeof cards !== 'object') continue;
+    for (const entry of Object.values(cards)) {
+      const e = entry as {
+        quantity?: unknown;
+        card?: { name?: unknown } | null;
+      } | null;
+      const name = e?.card?.name;
+      const quantity = e?.quantity;
+      if (typeof name === 'string' && typeof quantity === 'number' && quantity > 0) {
+        out.push({ name, quantity });
+      }
+    }
+  }
+  return out;
 }

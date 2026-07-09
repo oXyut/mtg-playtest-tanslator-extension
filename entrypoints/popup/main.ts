@@ -4,6 +4,7 @@ import { getSettings, saveSettings } from '../../src/settings';
 const moxfieldInput = document.getElementById('moxfield') as HTMLInputElement;
 const archidektInput = document.getElementById('archidekt') as HTMLInputElement;
 const hoverZoomInput = document.getElementById('hover-zoom') as HTMLInputElement;
+const jpPricesInput = document.getElementById('jp-prices') as HTMLInputElement;
 const clearButton = document.getElementById('clear-cache') as HTMLButtonElement;
 const status = document.getElementById('status') as HTMLSpanElement;
 
@@ -12,6 +13,7 @@ async function init(): Promise<void> {
   moxfieldInput.checked = settings.moxfield;
   archidektInput.checked = settings.archidekt;
   hoverZoomInput.checked = settings.hoverZoom;
+  jpPricesInput.checked = settings.jpPrices;
 }
 
 async function onChange(): Promise<void> {
@@ -19,12 +21,14 @@ async function onChange(): Promise<void> {
     moxfield: moxfieldInput.checked,
     archidekt: archidektInput.checked,
     hoverZoom: hoverZoomInput.checked,
+    jpPrices: jpPricesInput.checked,
   });
 }
 
 moxfieldInput.addEventListener('change', () => void onChange());
 archidektInput.addEventListener('change', () => void onChange());
 hoverZoomInput.addEventListener('change', () => void onChange());
+jpPricesInput.addEventListener('change', () => void onChange());
 
 clearButton.addEventListener('click', () => {
   void clearCache().then(() => {

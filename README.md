@@ -7,6 +7,11 @@ Moxfield / Archidekt のデッキ画面と Playtest(ソリティア)画面で、
   - Moxfield: `moxfield.com/decks/{id}` 配下(デッキビュー、primer、Playtest = goldfish)
   - Archidekt: `archidekt.com/decks/{id}`(デッキビュー)と `archidekt.com/playtester-v2/{id}`(Playtest)
 - ArchidektのPlaytestではカードにマウスを乗せると拡大表示します(Moxfieldの標準ホバー拡大に相当。ポップアップでOFFにできます)
+- **日本の店舗価格表示(Moxfield)**: ドル建ての価格表示を円に置き換えます
+  - 価格源: 晴れる屋の在庫あり・NM・非foilの最安値。在庫が無いカードは [Wisdom Guild](https://wonder.wisdom-guild.net/) のトリム平均(`¥xxx*` のようにアスタリスク付き)
+  - 画面右下にデッキ合計(メインデッキ+統率者)の円建てバッジを表示
+  - 価格は**カード名単位**です(セット・絵柄・言語別ではありません)。元のドル表示はホバー(title)で確認できます
+  - 24時間キャッシュ+直列取得で店舗サイトに負荷をかけない設計です
 
 ## インストール(ビルド済みを使う)
 

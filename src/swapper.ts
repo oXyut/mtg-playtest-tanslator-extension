@@ -11,6 +11,10 @@ export interface SiteAdapter {
   isBackFace(img: HTMLImageElement): boolean;
   /** ホバー拡大用の高解像度画像URL。拡大対象外のimgなら null */
   zoomSrc?(img: HTMLImageElement): string | null;
+  /** imgからカードの英語名を得る(価格表示用)。不明なら null */
+  getCardName?(img: HTMLImageElement): Promise<string | null>;
+  /** メインデッキ+統率者の {英語名, 枚数} 一覧(デッキ合計金額用)。取れなければ null */
+  getDeckList?(): Promise<Array<{ name: string; quantity: number }> | null>;
 }
 
 const ORIGINAL_SRC = 'jpOriginalSrc';
