@@ -22,6 +22,7 @@ interface ScryfallCardFace {
   name: string;
   printed_name?: string;
   printed_text?: string;
+  illustration_id?: string;
   image_uris?: ScryfallImageUris;
 }
 
@@ -29,12 +30,27 @@ interface ScryfallCard {
   id: string;
   name: string;
   lang: string;
+  set?: string;
   oracle_id?: string;
   image_status: string;
   printed_name?: string;
   printed_text?: string;
+  illustration_id?: string;
   image_uris?: ScryfallImageUris;
   card_faces?: ScryfallCardFace[];
+}
+
+/** 英語版の元printingに寄せるための選好情報 */
+interface PrintingPreference {
+  illustrationId?: string;
+  set?: string;
+}
+
+function illustrationIds(card: ScryfallCard): string[] {
+  return [
+    card.illustration_id,
+    ...(card.card_faces ?? []).map((f) => f.illustration_id),
+  ].filter((x): x is string => x !== undefined);
 }
 
 const CJK = /[぀-ヿ㐀-䶿一-鿿]/;
@@ -133,7 +149,14 @@ async function lookupByScryfallId(id: string): Promise<JpLookupResult> {
   if (card.lang === 'ja' && hasJapaneseText(card)) return extractImages(card);
   if (!card.oracle_id) return null;
 
-  return enqueue(() => searchJapanesePrinting(`oracleid:${card.oracle_id}`));
+  // 元の英語版と同じ絵柄・同じセットの日本語版を優先する
+  const prefer: PrintingPreference = {
+    illustrationId: illustrationIds(card)[0],
+    set: card.set,
+  };
+  return enqueue(() =>
+    searchJapanesePrinting(`oracleid:${card.oracle_id}`, undefined, prefer),
+  );
 }
 
 /** /cards/collection は1リクエストで75件まで解決できる */
@@ -202,6 +225,7 @@ async function fetchCollection(items: PendingResolve[]): Promise<void> {
 async function searchJapanesePrinting(
   baseQuery: string,
   exactName?: string,
+  prefer?: PrintingPreference,
 ): Promise<JpLookupResult> {
   const query = `${baseQuery} lang:ja game:paper`;
   const url =
@@ -229,7 +253,21 @@ async function searchJapanesePrinting(
   const fullyJapanese = candidates.filter(hasJapaneseName);
   const pool = fullyJapanese.length > 0 ? fullyJapanese : candidates;
 
-  const best = pool.find((c) => c.image_status === 'highres_scan') ?? pool[0];
+  // 同じ絵柄 > 同じセット > 高解像度 の順で元の英語版に寄せる。
+  // 同点は検索順(リリース日の新しい順)で先のものを採用
+  const score = (c: ScryfallCard): number => {
+    let s = 0;
+    if (
+      prefer?.illustrationId !== undefined &&
+      illustrationIds(c).includes(prefer.illustrationId)
+    ) {
+      s += 4;
+    }
+    if (prefer?.set !== undefined && c.set === prefer.set) s += 2;
+    if (c.image_status === 'highres_scan') s += 1;
+    return s;
+  };
+  const best = pool.reduce((a, b) => (score(b) > score(a) ? b : a));
   return extractImages(best);
 }
 

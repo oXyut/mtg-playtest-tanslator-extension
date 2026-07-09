@@ -35,8 +35,12 @@ content script (MutationObserver)
       Archidekt: img src (card-images.archidekt.com/normal/front/x/y/{uuid}.jpg) に
                  Scryfall UUID がそのまま入っている(alt "名前 (set) 番号" のフォールバックあり)
   → Scryfall で日本語版 printing を検索
-      Scryfall ID → /cards/{id} で oracle_id を解決 → oracleid:xxx lang:ja を検索
+      Scryfall ID → /cards/collection で一括解決(75件/リクエスト)
+      → oracleid:xxx lang:ja を検索
       (100ms間隔の直列キューでレート制限を遵守)
+  → 候補が複数ある場合の優先順位:
+      カード名まで日本語の通常版 > 元の英語版と同じ絵柄(illustration_id)
+      > 同じセット > 高解像度スキャン > リリースが新しいもの
   → img.src を日本語版画像 (cards.scryfall.io) に差し替え
   → 結果は chrome.storage.local に30日キャッシュ(「日本語版なし」も記録)
 ```
