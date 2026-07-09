@@ -53,16 +53,25 @@ content script (MutationObserver)
   → 結果は chrome.storage.local に30日キャッシュ(「日本語版なし」も記録)
 ```
 
+価格(デッキ合計)は、CORS回避のため background service worker が晴れる屋の検索API /
+Wisdom Guildの価格ページから取得します(200ms間隔の直列キュー+24時間キャッシュ)。
+
 主要ファイル:
 
 | ファイル | 役割 |
 |---|---|
 | `entrypoints/content.ts` | エントリポイント。ホスト名で adapter を選択 |
+| `entrypoints/background.ts` | 価格取得の直列キュー+キャッシュ(メッセージで応答) |
 | `src/swapper.ts` | MutationObserver で img を監視して差し替え |
 | `src/scryfall.ts` | 日本語版 printing 検索(レート制限キュー付き) |
-| `src/cache.ts` | storage.local キャッシュ (TTL 30日) |
+| `src/prices.ts` | 晴れる屋 / Wisdom Guild の価格取得ロジック |
+| `src/price-overlay.ts` | デッキ合計バッジと内訳パネル |
+| `src/hover-zoom.ts` / `src/progress-badge.ts` | ホバー拡大 / 進捗バッジ |
+| `src/cache.ts` / `src/settings.ts` | storage キャッシュ (TTL 30日) / 設定 |
 | `src/sites/moxfield.ts` / `src/sites/archidekt.ts` | サイト別の識別ロジック |
-| `entrypoints/popup/` | サイト別 ON/OFF とキャッシュクリア |
+| `entrypoints/popup/` | ON/OFF・店舗選択・キャッシュクリア |
+
+開発者向けの詳細(データソースの仕様、デバッグ手法、設計の経緯)は [DEV.md](DEV.md) を参照してください。
 
 ## 既知の制限
 
